@@ -40,7 +40,8 @@ async fn main() -> std::io::Result<()> {
             .service(song)
     })
         .bind("127.0.0.1:8080").and_then(|it| {
-            println!("Server runs at port 8080");
+            println!("{}", "Server runs at port 8080");
+            println!("{}", "Open http://localhost:8080/ in the browser you prefer.");
             Ok(it)
         })?
         .run()
