@@ -5,14 +5,17 @@ use base64::{decode_config, STANDARD_NO_PAD};
 use flate2::read::ZlibDecoder;
 use std::io::Read;
 
-pub fn parse(input: &[u8]) -> Result<String, String> {
-    let mut base64_decoded = decode_config(input, STANDARD_NO_PAD).expect("input value is invalid");
+pub fn parse(input: &[u8], is_base64: bool) -> Result<String, String> {
+    let mut real_input = input.to_owned();
+    if is_base64 {
+        real_input = decode_config(input, STANDARD_NO_PAD).expect("input value is invalid");
+    }
 
-    if String::from_utf8_lossy(&base64_decoded[..4]) != "krc1" {
+    if String::from_utf8_lossy(&real_input[..4]) != "krc1" {
         return Err("Input is not a krc file!".to_string());
     }
 
-    let (_, input) = base64_decoded.split_at_mut(4);
+    let (_, input) = real_input.split_at_mut(4);
 
     for i in 0..input.len() {
         input[i] ^= KEYS[i % 16];

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KRC H5</title>
+    <style>
+        .krc-container {
+            background-color: rgb(248, 239, 227);
+        }
+        span {
+            font-size: xx-large;
+        }
+
+        .sing-over {
+            /* -webkit-text-fill-color: transparent; */
+            color: transparent;
+            background: black linear-gradient(to right, cornflowerblue, cornflowerblue) no-repeat;
+            background-clip: text;
+            -webkit-background-clip: text;
+        }
+
+        @keyframes color-changing {
+            from {
+                background-size: 0% 100%;
+            }
+            to {
+                background-size: 100% 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <audio id="audio-tag" controls src="/song"></audio>
+
+    <div class="krc-container"></div>
+    
+    <script>
+        // http://lyrics.kugou.com/search?ver=1&man=yes&client=pc&keyword=Savage%20love&duration=228022&hash=
+        // http://lyrics.kugou.com/download?ver=1&client=pc&id=10515303&accesskey=3A20F6A1933DE370EBA0187297F5477D&fmt=krc&charset=utf8
+        // https://blog.csdn.net/u010752082/article/details/50810190
+
+        const audioTag = document.getElementById("audio-tag");
+        const container = document.getElementsByClassName("krc-container")[0];
+
+        (
+            /**
+            * @param {HTMLElement} container
+            * @param {HTMLAudioElement} audioTag
+            */
+            async function(container, audioTag) {
+            const krcContent = await (await fetch("/lyric")).text();
+            const reg1 = /^\[(\d+),(\d+)\]/
+            const reg2 = /,\d+\](.*)/
+            const reg3 = /\<(\d+),(\d+),(\d+)\>(((.*?)(?=\<))|(.*))/g
+
+            class LinePart {
+                constructor(partOffset, partDuration, unused, content) {
+                    this.partOffset = partOffset;
+                    this.partDuration = partDuration;
+                    this.unused = unused;
+                    this.content = content;
+                }
+            }
+
+            class Line {
+                /**
+                * @param {LinePart[]} lineParts
+                */
+                constructor(lineStart, lineDuration, lineParts) {
+                    this.lineStart = lineStart;
+                    this.lineDuration = lineDuration;
+                    this.lineParts = lineParts;
+                }
+            }
+
+            const parseResult = [];
+            for(const line of krcContent.split("\n")) {
+                if(line.match(reg1)){
+                    const lyric = line.match(reg2)[1];
+                    const header = line.match(reg1);
+                    const parts = [...lyric.matchAll(reg3)]
+                    const lineParts = parts.map(it => new LinePart(it[1], it[2], it[3], it[4]));
+                    parseResult.push(new Line(header[1], header[2], lineParts));
+                }
+            }
+
+            // console.log(parseResult)
+
+            parseResult.forEach(element => {
+                const lineDOM = document.createElement("div");
+                lineDOM.dataset.start_time = element.lineStart;
+                lineDOM.dataset.line_duration = element.lineDuration;
+
+                element.lineParts.forEach(it => {
+                    const partDOM = document.createElement("span");
+                    partDOM.dataset.start_offset = it.partOffset;
+                    partDOM.dataset.part_duration = it.partDuration;
+                    partDOM.dataset.unused = it.unused;
+                    partDOM.dataset.content = it.content;
+                    partDOM.textContent = it.content;
+                    lineDOM.appendChild(partDOM);
+                });
+                container.appendChild(lineDOM);
+            });
+            
+            /** @type {HTMLElement[]} */
+            const lines = container.getElementsByTagName("div");
+
+            // KRC in the demo is earlier than song for 1 second
+            // We add 1000ms to match the song with the lyric file
+            const ajustTime = 1000;
+
+            audioTag.ontimeupdate = function(ev) {
+                const time = ev.timeStamp;
+                /** @type {HTMLElement} */
+                let currentElement = null;
+                let currentElementStartTime = 0;
+                for(const line of lines) {
+                    const startTime = Number.parseInt(line.getAttribute("data-start_time")) + ajustTime;
+                    if(startTime <= time) {
+                        currentElement = line;
+                        currentElementStartTime = startTime;
+                    } else {
+                        break;
+                    }
+                }
+                // console.log(currentElement)
+                /** @type {HTMLElement[]} */
+                const parts = currentElement.getElementsByTagName("span");
+                /** @type {HTMLElement} */
+                let currentPart = null;
+                let currentPartStartTime = 0;
+                let currentPartDuration = 0;
+
+                for (const part of parts) {
+                    const startOffset = Number.parseInt(part.getAttribute("data-start_offset"));
+                    const partDuration = Number.parseInt(part.getAttribute("data-part_duration"));
+                    const startTime = currentElementStartTime + startOffset;
+                    // console.log("------------------")
+                    // console.log(startTime)
+                    // console.log(partDuration);
+                    if(startTime <= time) {
+                        currentPart = part;
+                        currentPartStartTime = startTime;
+                        currentPartDuration = partDuration;
+                        currentPart.classList.add("sing-over");
+                        currentPart.style.animation = `color-changing ${currentPartDuration}ms ease-in-out`;
+                    } else {
+                        break;
+                    }
+                }
+
+                // console.log("------------------");
+                // console.log(currentPartStartTime);
+                // console.log(currentPartDuration);
+            }
+
+        })(container, audioTag)
+    </script>
+</body>
+</html>
